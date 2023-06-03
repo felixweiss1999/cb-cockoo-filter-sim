@@ -18,5 +18,5 @@ class BloomFilter:
                 return False
         return True
     
-    def checkPos(self, index):
+    def __getitem__(self, index):
         return self.bitarray[index]
