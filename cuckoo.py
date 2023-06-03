@@ -23,35 +23,39 @@ class CuckooFilter:
         self.buckets = [[] for _ in range(num_buckets)]
         self.num_items = 0
 
-    def insert(self, __item : str):
-        if self.lookup(__item):
+    def insert(self, __item : str) -> bool:
+        """
+        Inserts byte-like object into the filter.
+
+        Returns True if insert successful, otherwise False.
+        """
+        fingerprint = self._get_fingerprint(item=__item)
+        index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+        index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2))  % self.num_buckets
+
+        if len(self.buckets[index1]) < self.bucket_size:
+            self.buckets[index1].append(fingerprint)
+            self.num_items += 1
             return True
 
-        if self.num_items >= self.num_buckets:
-            return False
-
-        index1 = self._get_index(__item)
-        index2 = (index1 ^ self._get_fingerprint(__item)) % self.num_buckets
-
+        if len(self.buckets[index2]) < self.bucket_size:
+            self.buckets[index2].append(fingerprint)
+            self.num_items += 1
+            return True
+        
+        #need to enter evict procedure
+        eviction_index = random.choice([index1, index2])
         for _ in range(self.max_kicks):
-            if not self.buckets[index1]:
-                self.buckets[index1].append(self._get_fingerprint(__item))
+            if len(self.buckets[eviction_index]) < self.bucket_size:
+                self.buckets[eviction_index].append(fingerprint)
                 self.num_items += 1
                 return True
-
-            if not self.buckets[index2]:
-                self.buckets[index2].append(self._get_fingerprint(__item))
-                self.num_items += 1
-                return True
-
-            eviction_index = random.choice([index1, index2])
             eviction_fingerprint = random.choice(self.buckets[eviction_index])
             self.buckets[eviction_index].remove(eviction_fingerprint)
-            self.buckets[eviction_index].append(self._get_fingerprint(__item))
+            self.buckets[eviction_index].append(fingerprint)
 
-            __item = self._get_item(eviction_fingerprint)
-            index1 = self._get_index(__item)
-            index2 = (index1 ^ self._get_fingerprint(__item)) % self.num_buckets
+            fingerprint = eviction_fingerprint #in next iter, fingerprint holds to be inserted fingerprint
+            eviction_index = (eviction_index ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets#compute alternate bucket
 
         return False
 
@@ -65,7 +69,7 @@ class CuckooFilter:
         """
         fingerprint = self._get_fingerprint(item=__item)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
-        index2 = (index1 ^ (mmh3.hash(key=str(fingerprint), seed=2) % self.num_buckets)) #might need to do another modulo
+        index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets #might need to do another modulo
         return fingerprint in self.buckets[index1] or fingerprint in self.buckets[index2]
 
     def delete(self, __item : str):
@@ -79,7 +83,7 @@ class CuckooFilter:
         if fingerprint in self.buckets[index1]:
             self.buckets[index1].remove(fingerprint)
             return
-        index2 = (index1 ^ (mmh3.hash(key=str(fingerprint), seed=2) % self.num_buckets))
+        index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets
         if fingerprint in self.buckets[index2]:
             self.buckets[index2].remove(fingerprint)
             return 
@@ -104,10 +108,3 @@ class CuckooFilter:
     def _get_fingerprint(self, item):
         return mmh3.hash(key=item) % (2**self.fingerprint_len)
 
-    def _get_item(self, fingerprint):
-        for bucket in self.buckets:
-            for item in bucket:
-                if self._get_fingerprint(item) == fingerprint:
-                    return item
-
-        return None
