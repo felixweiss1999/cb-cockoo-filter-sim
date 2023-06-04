@@ -1,5 +1,5 @@
-import random
-import mmh3
+import random, mmh3
+from bitarray import bitarray
 
 class CuckooFilter:
     def __init__(self, num_buckets : int, bucket_size : int, fingerprint_len : int, max_kicks = 10):
@@ -59,7 +59,7 @@ class CuckooFilter:
 
         return False
 
-    def lookup(self, __item : str):
+    def lookup(self, __item : str) -> bool:
         """
         Always returns True if element was inserted.
         
@@ -108,3 +108,48 @@ class CuckooFilter:
     def _get_fingerprint(self, item):
         return mmh3.hash(key=item) % (2**self.fingerprint_len)
 
+class CBCuckooFilter(CuckooFilter):
+    def __init__(self, num_buckets : int, bucket_size : int, fingerprint_len : int, max_kicks = 10):
+        """
+        Initializes a Configurable-Bucket Cuckoo Filter. This is a Cuckoo Filter which adjusts
+        fingerprint length stored in the buckets based on filter occupancy. Achieves lower false 
+        positive rate compared to ordinary CuckooFilter.
+
+        Args:
+            num_buckets: int > 0
+            bucket_size: int > 0
+            fingerprint_len: int > 0
+            max_kicks: int > 0 : max number of retry iterations when inserting
+        
+        Raises ValueError if constraints not met.
+        """
+        super().__init__(num_buckets, bucket_size, fingerprint_len, max_kicks)
+        self.sbits = bitarray(num_buckets)
+        self.sbits.setall(0)
+        self.actual_elements = [[] for _ in range(num_buckets)]
+
+    def insert(self, __item : str) -> bool:
+        """
+        Inserts byte-like object into the filter.
+
+        Returns True if insert successful, otherwise False.
+        """
+        pass
+
+    def lookup(self, __item : str) -> bool:
+        """
+        Always returns True if element was inserted.
+        
+        Most likely returns False if element was not inserted.
+        
+        May return True even if element was not inserted.
+        """
+        pass
+
+    def delete(self, __item : str):
+        """
+        Delete element of filter.
+
+        Raises ValueError if element is not found.
+        """
+        pass
