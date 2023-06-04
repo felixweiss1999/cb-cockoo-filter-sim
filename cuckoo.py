@@ -276,6 +276,11 @@ class CBCuckooFilter(CuckooFilter):
                 assert len(self.buckets[i]) == self.bucket_size
                 for j in range(len(self.buckets[i])):
                     assert self.buckets[i][j] == self._get_fingerprint(item=self.actual_elements[i][j], len=self.fingerprint_len)
-            
-            
-                
+
+    def compute_false_positive_rate(self) -> float:
+        """
+        Returns the false positive rate based on:
+
+        8 * filter_occupancy / 2**fingerprint_len
+        """
+        return 8 *self.compute_filter_occupancy() / 2**self.fingerprint_len
