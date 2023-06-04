@@ -74,7 +74,7 @@ class CuckooFilter:
 
     def delete(self, __item : str):
         """
-        Delete element of filter.
+        Delete element from filter.
 
         Raises ValueError if element is not found.
         """
@@ -82,10 +82,12 @@ class CuckooFilter:
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
         if fingerprint in self.buckets[index1]:
             self.buckets[index1].remove(fingerprint)
+            self.num_items -= 1
             return
         index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets
         if fingerprint in self.buckets[index2]:
             self.buckets[index2].remove(fingerprint)
+            self.num_items -= 1
             return 
         raise ValueError()
 
@@ -217,7 +219,49 @@ class CBCuckooFilter(CuckooFilter):
 
         Raises ValueError if element is not found.
         """
-        pass
+        short_fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
+        long_fingerprint = self._get_fingerprint(item=__item, len=self.long_fingerprint_len)
+        index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+        #check index1
+        if self.sbits[index1]:
+            if long_fingerprint in self.buckets[index1]:
+                if __item in self.actual_elements[index1]:
+                    self.buckets[index1].pop(self.actual_elements[index1].index(__item))
+                    self.actual_elements[index1].remove(__item)
+                    self.num_items -= 1
+                    return
+        else:
+            if short_fingerprint in self.buckets[index1]:
+                if __item in self.actual_elements[index1]:
+                    self.buckets[index1].pop(self.actual_elements[index1].index(__item))
+                    self.actual_elements[index1].remove(__item)
+                    self.num_items -= 1
+                    #need to convert bucket to long fingerprints!
+                    for i in range(len(self.buckets[index1])):
+                        self.buckets[index1][i] = self._get_fingerprint(item=self.actual_elements[index1][i], len=self.long_fingerprint_len)
+                    self.sbits[index1] = 1
+                    return
+        #check index 2
+        index2 = (index1 ^ mmh3.hash(key=str(short_fingerprint), seed=2)) % self.num_buckets
+        if self.sbits[index2]:
+            if long_fingerprint in self.buckets[index2]:
+                if __item in self.actual_elements[index2]:
+                    self.buckets[index2].pop(self.actual_elements[index2].index(__item))
+                    self.actual_elements[index2].remove(__item)
+                    self.num_items -= 1
+                    return
+        else:
+            if short_fingerprint in self.buckets[index2]:
+                if __item in self.actual_elements[index2]:
+                    self.buckets[index2].pop(self.actual_elements[index2].index(__item))
+                    self.actual_elements[index2].remove(__item)
+                    self.num_items -= 1
+                    #need to convert bucket to long fingerprints!
+                    for i in range(len(self.buckets[index2])):
+                        self.buckets[index2][i] = self._get_fingerprint(item=self.actual_elements[index2][i], len=self.long_fingerprint_len)
+                    self.sbits[index2] = 1
+                    return
+        raise ValueError()
 
     def _test_verify_state(self):
         for i in range(self.num_buckets):

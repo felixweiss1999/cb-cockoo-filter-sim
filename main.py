@@ -12,3 +12,7 @@ for i in range(750):
     d.insert(str(i))
 d._test_verify_state()
 print(d.compute_filter_occupancy(), d.compute_false_positive_rate())
+for i in range(200):
+    d.delete(str(i))
+d._test_verify_state()
+print(d.compute_filter_occupancy(), d.compute_false_positive_rate())
