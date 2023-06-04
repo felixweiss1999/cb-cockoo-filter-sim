@@ -281,6 +281,18 @@ class CBCuckooFilter(CuckooFilter):
         """
         Returns the false positive rate based on:
 
-        8 * filter_occupancy / 2**fingerprint_len
+        8 * (l/2**(4/3*f) + s/2**f)
+
+        where
+
+        l: fraction of available filter slots filled by short fingerprints
+
+        s: fraction of available filter slots filled by long fingerprints
         """
-        return 8 *self.compute_filter_occupancy() / 2**self.fingerprint_len
+        shortscounter = 0
+        for i in range(self.num_buckets):
+            if self.sbits[i] == 0:
+                shortscounter += 4
+        s = shortscounter / (self.num_buckets * self.bucket_size)
+        l = (self.num_items - shortscounter) / (self.num_buckets * self.bucket_size)
+        return 8 * (l / 2**(self.long_fingerprint_len) + s / 2**(self.fingerprint_len))
