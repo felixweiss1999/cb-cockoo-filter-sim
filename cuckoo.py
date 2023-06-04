@@ -29,7 +29,7 @@ class CuckooFilter:
 
         Returns True if insert successful, otherwise False.
         """
-        fingerprint = self._get_fingerprint(item=__item)
+        fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
         index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2))  % self.num_buckets
 
@@ -67,7 +67,7 @@ class CuckooFilter:
         
         May return True even if element was not inserted.
         """
-        fingerprint = self._get_fingerprint(item=__item)
+        fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
         index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets #might need to do another modulo
         return fingerprint in self.buckets[index1] or fingerprint in self.buckets[index2]
@@ -78,7 +78,7 @@ class CuckooFilter:
 
         Raises ValueError if element is not found.
         """
-        fingerprint = self._get_fingerprint(item=__item)
+        fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
         if fingerprint in self.buckets[index1]:
             self.buckets[index1].remove(fingerprint)
@@ -105,8 +105,8 @@ class CuckooFilter:
         """
         return self.num_items / (self.num_buckets * self.bucket_size)
     
-    def _get_fingerprint(self, item):
-        return mmh3.hash(key=item) % (2**self.fingerprint_len)
+    def _get_fingerprint(self, item, len):
+        return mmh3.hash(key=item) % (2**len)
 
 class CBCuckooFilter(CuckooFilter):
     def __init__(self, num_buckets : int, bucket_size : int, fingerprint_len : int, max_kicks = 10):
@@ -126,6 +126,7 @@ class CBCuckooFilter(CuckooFilter):
         super().__init__(num_buckets, bucket_size, fingerprint_len, max_kicks)
         self.sbits = bitarray(num_buckets)
         self.sbits.setall(0)
+        self.long_fingerprint_len = int(self.fingerprint_len + self.fingerprint_len/3)
         self.actual_elements = [[] for _ in range(num_buckets)]
 
     def insert(self, __item : str) -> bool:
@@ -134,7 +135,35 @@ class CBCuckooFilter(CuckooFilter):
 
         Returns True if insert successful, otherwise False.
         """
-        pass
+        fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
+        index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+        index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2))  % self.num_buckets
+
+        if len(self.buckets[index1]) < self.bucket_size:
+            self.buckets[index1].append(fingerprint)
+            self.num_items += 1
+            return True
+
+        if len(self.buckets[index2]) < self.bucket_size:
+            self.buckets[index2].append(fingerprint)
+            self.num_items += 1
+            return True
+        
+        #need to enter evict procedure
+        eviction_index = random.choice([index1, index2])
+        for _ in range(self.max_kicks):
+            if len(self.buckets[eviction_index]) < self.bucket_size:
+                self.buckets[eviction_index].append(fingerprint)
+                self.num_items += 1
+                return True
+            eviction_fingerprint = random.choice(self.buckets[eviction_index])
+            self.buckets[eviction_index].remove(eviction_fingerprint)
+            self.buckets[eviction_index].append(fingerprint)
+
+            fingerprint = eviction_fingerprint #in next iter, fingerprint holds to be inserted fingerprint
+            eviction_index = (eviction_index ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets#compute alternate bucket
+
+        return False
 
     def lookup(self, __item : str) -> bool:
         """
@@ -144,7 +173,23 @@ class CBCuckooFilter(CuckooFilter):
         
         May return True even if element was not inserted.
         """
-        pass
+        short_fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
+        long_fingerprint = self._get_fingerprint(item=__item, len=self.long_fingerprint_len)
+        index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+        index2 = (index1 ^ mmh3.hash(key=str(short_fingerprint), seed=2)) % self.num_buckets
+        if self.sbits[index1]:
+            if long_fingerprint in self.buckets[index1]:
+                return True
+        else:
+            if short_fingerprint in self.buckets[index1]:
+                return True
+        if self.sbits[index2]:
+            if long_fingerprint in self.buckets[index2]:
+                return True
+        else:
+            if short_fingerprint in self.buckets[index2]:
+                return True
+        return False
 
     def delete(self, __item : str):
         """
