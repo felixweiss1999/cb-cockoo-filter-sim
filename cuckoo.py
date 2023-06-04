@@ -125,7 +125,7 @@ class CBCuckooFilter(CuckooFilter):
         """
         super().__init__(num_buckets, bucket_size, fingerprint_len, max_kicks)
         self.sbits = bitarray(num_buckets)
-        self.sbits.setall(0)
+        self.sbits.setall(1) #all empty!
         self.long_fingerprint_len = int(self.fingerprint_len + self.fingerprint_len/3)
         self.actual_elements = [[] for _ in range(num_buckets)]
 
@@ -135,33 +135,53 @@ class CBCuckooFilter(CuckooFilter):
 
         Returns True if insert successful, otherwise False.
         """
-        fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
+        short_fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
+        long_fingerprint = self._get_fingerprint(item=__item, len=self.long_fingerprint_len)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
-        index2 = (index1 ^ mmh3.hash(key=str(fingerprint), seed=2))  % self.num_buckets
+        index2 = (index1 ^ mmh3.hash(key=str(short_fingerprint), seed=2))  % self.num_buckets
+        if len(self.buckets[index1]) < len(self.buckets[index2]):
+            insertindex = index1
+        else:
+            insertindex = index2
 
-        if len(self.buckets[index1]) < self.bucket_size:
-            self.buckets[index1].append(fingerprint)
+        if len(self.buckets[insertindex]) < self.bucket_size:
+            if len(self.buckets[insertindex]) == self.bucket_size - 1:
+                # special case: transforms long fingerprints into short ones.
+                for i in range(len(self.buckets[insertindex])):
+                    self.buckets[insertindex][i] = self._get_fingerprint(item=self.actual_elements[insertindex][i], len=self.fingerprint_len)
+                self.buckets[insertindex].append(short_fingerprint)
+                self.sbits[insertindex] = 0
+            else:
+                self.buckets[insertindex].append(long_fingerprint)
+            self.actual_elements[insertindex].append(__item)
             self.num_items += 1
             return True
 
-        if len(self.buckets[index2]) < self.bucket_size:
-            self.buckets[index2].append(fingerprint)
-            self.num_items += 1
-            return True
+        
         
         #need to enter evict procedure
         eviction_index = random.choice([index1, index2])
         for _ in range(self.max_kicks):
             if len(self.buckets[eviction_index]) < self.bucket_size:
-                self.buckets[eviction_index].append(fingerprint)
+                if len(self.buckets[eviction_index]) == self.bucket_size - 1:
+                    # special case: transforms long fingerprints into short ones.
+                    for i in range(len(self.buckets[eviction_index])):
+                        self.buckets[eviction_index][i] = self._get_fingerprint(item=self.actual_elements[eviction_index][i], len=self.fingerprint_len)
+                    self.buckets[eviction_index].append(short_fingerprint)
+                    self.sbits[eviction_index] = 0
+                else:
+                    self.buckets[eviction_index].append(self._get_fingerprint(item=__item, len=self.long_fingerprint_len)) #get this long one on the fly
+                self.actual_elements[eviction_index].append(__item)
                 self.num_items += 1
                 return True
-            eviction_fingerprint = random.choice(self.buckets[eviction_index])
-            self.buckets[eviction_index].remove(eviction_fingerprint)
-            self.buckets[eviction_index].append(fingerprint)
+            eviction_fingerprint = self.buckets[eviction_index].pop()
+            eviction_item = self.actual_elements[eviction_index].pop()
+            self.buckets[eviction_index].append(short_fingerprint)
+            self.actual_elements[eviction_index].append(__item)
 
-            fingerprint = eviction_fingerprint #in next iter, fingerprint holds to be inserted fingerprint
-            eviction_index = (eviction_index ^ mmh3.hash(key=str(fingerprint), seed=2)) % self.num_buckets#compute alternate bucket
+            short_fingerprint = eviction_fingerprint # in next iter, short_fingerprint holds to be inserted short_fingerprint
+            __item = eviction_item
+            eviction_index = (eviction_index ^ mmh3.hash(key=str(short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
 
         return False
 
@@ -198,3 +218,20 @@ class CBCuckooFilter(CuckooFilter):
         Raises ValueError if element is not found.
         """
         pass
+
+    def _test_verify_state(self):
+        for i in range(self.num_buckets):
+            #check length consistency
+            assert len(self.buckets[i]) == len(self.actual_elements[i])
+            #check sbits consistency
+            if self.sbits[i]:
+                assert len(self.buckets[i]) < self.bucket_size
+                for j in range(len(self.buckets[i])):
+                    assert self.buckets[i][j] == self._get_fingerprint(item=self.actual_elements[i][j], len=self.long_fingerprint_len)
+            else:
+                assert len(self.buckets[i]) == self.bucket_size
+                for j in range(len(self.buckets[i])):
+                    assert self.buckets[i][j] == self._get_fingerprint(item=self.actual_elements[i][j], len=self.fingerprint_len)
+            
+            
+                
