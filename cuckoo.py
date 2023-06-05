@@ -183,7 +183,10 @@ class CBCuckooFilter(CuckooFilter):
 
             short_fingerprint = eviction_fingerprint # in next iter, short_fingerprint holds to be inserted short_fingerprint
             __item = eviction_item
-            eviction_index = (eviction_index ^ mmh3.hash(key=str(short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
+            #recompute corresponding index for 'floating' item
+            index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+            index2 = (index1 ^ mmh3.hash(key=str(short_fingerprint), seed=2))  % self.num_buckets
+            eviction_index = index2 if eviction_index == index1 else index1
 
         return False
 
