@@ -219,9 +219,13 @@ class CBCuckooFilter(CuckooFilter):
 
         Raises ValueError if element is not found.
         """
+        if __item == '190':
+            pass
         short_fingerprint = self._get_fingerprint(item=__item, len=self.fingerprint_len)
         long_fingerprint = self._get_fingerprint(item=__item, len=self.long_fingerprint_len)
         index1 = mmh3.hash(key=__item, seed=1) % self.num_buckets
+        if index1 == 70 or index1 == 25:
+            pass
         #check index1
         if self.sbits[index1]:
             if long_fingerprint in self.buckets[index1]:
@@ -243,6 +247,8 @@ class CBCuckooFilter(CuckooFilter):
                     return
         #check index 2
         index2 = (index1 ^ mmh3.hash(key=str(short_fingerprint), seed=2)) % self.num_buckets
+        if index2 == 70 or index2 == 25:
+            pass
         if self.sbits[index2]:
             if long_fingerprint in self.buckets[index2]:
                 if __item in self.actual_elements[index2]:
@@ -276,6 +282,11 @@ class CBCuckooFilter(CuckooFilter):
                 assert len(self.buckets[i]) == self.bucket_size
                 for j in range(len(self.buckets[i])):
                     assert self.buckets[i][j] == self._get_fingerprint(item=self.actual_elements[i][j], len=self.fingerprint_len)
+            for j in range(len(self.buckets[i])):
+                short_fprint = self._get_fingerprint(item=self.actual_elements[i][j], len=self.fingerprint_len)
+                index1 = mmh3.hash(key=self.actual_elements[i][j], seed=1) % self.num_buckets
+                index2 = (index1 ^ mmh3.hash(key=str(short_fprint), seed=2))  % self.num_buckets
+                assert i == index1 or i == index2
 
     def compute_false_positive_rate(self) -> float:
         """
@@ -309,6 +320,9 @@ class CBCuckooFilter(CuckooFilter):
                 eviction_item = self.actual_elements[eviction_index].pop()
                 eviction_short_fingerprint = self.buckets[eviction_index].pop()
                 eviction_long_fingerprint = self._get_fingerprint(item=eviction_item, len=self.long_fingerprint_len)
+                for j in range(len(self.buckets[eviction_index])): #convert to longs
+                    self.buckets[eviction_index][j] = self._get_fingerprint(item=self.actual_elements[eviction_index][j], len=self.long_fingerprint_len)
+                self.sbits[eviction_index] = 1
                 for _ in range(20):
                     eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
                     if len(self.buckets[eviction_index]) < self.bucket_size - 1:
@@ -334,7 +348,7 @@ class CBCuckooFilter(CuckooFilter):
                     eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
                     if len(self.buckets[eviction_index]) < self.bucket_size:
                         #success, can insert fingerprint
-                        if len(self.bucket_size[eviction_index]) == self.bucket_size - 1: #need to transform bucket to shorts
+                        if len(self.buckets[eviction_index]) == self.bucket_size - 1: #need to transform bucket to shorts
                             for j in range(len(self.buckets[eviction_index])):
                                 self.buckets[eviction_index][j] = self._get_fingerprint(item=self.actual_elements[eviction_index][j], len=self.fingerprint_len)
                             self.buckets[eviction_index].append(eviction_short_fingerprint)
