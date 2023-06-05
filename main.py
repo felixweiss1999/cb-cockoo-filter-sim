@@ -16,10 +16,10 @@ for i in range(100):
     for j in range(len(d.actual_elements[i])):
         if d.actual_elements[i][j] == '190':
             print("i", i)
-for i in range(200):
-    d.delete(str(i))
-d._test_verify_state()
-print(d.compute_filter_occupancy(), d.compute_false_positive_rate())
+# for i in range(200):
+#     d.delete(str(i))
+# d._test_verify_state()
+# print(d.compute_filter_occupancy(), d.compute_false_positive_rate())
 d.scrub()
 d._test_verify_state()
 print(d.compute_filter_occupancy(), d.compute_false_positive_rate())

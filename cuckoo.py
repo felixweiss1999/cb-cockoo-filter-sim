@@ -327,7 +327,10 @@ class CBCuckooFilter(CuckooFilter):
                     self.buckets[eviction_index][j] = self._get_fingerprint(item=self.actual_elements[eviction_index][j], len=self.long_fingerprint_len)
                 self.sbits[eviction_index] = 1
                 for _ in range(20):
-                    eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
+                    #recompute corresponding index for 'floating' item
+                    index1 = mmh3.hash(key=eviction_item, seed=1) % self.num_buckets
+                    index2 = (index1 ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2))  % self.num_buckets
+                    eviction_index = index2 if eviction_index == index1 else index1
                     if len(self.buckets[eviction_index]) < self.bucket_size - 1:
                         #success, can insert long fingerprint
                         self.buckets[eviction_index].append(eviction_long_fingerprint)
@@ -348,7 +351,10 @@ class CBCuckooFilter(CuckooFilter):
                 if eviction_item == 0:
                     continue
                 while True: #continue indefinitely until swap completed (this loop relaxes constraints)
-                    eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
+                    #recompute corresponding index for 'floating' item
+                    index1 = mmh3.hash(key=eviction_item, seed=1) % self.num_buckets
+                    index2 = (index1 ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2))  % self.num_buckets
+                    eviction_index = index2 if eviction_index == index1 else index1
                     if len(self.buckets[eviction_index]) < self.bucket_size:
                         #success, can insert fingerprint
                         if len(self.buckets[eviction_index]) == self.bucket_size - 1: #need to transform bucket to shorts
