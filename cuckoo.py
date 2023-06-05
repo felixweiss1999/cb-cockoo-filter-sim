@@ -296,3 +296,57 @@ class CBCuckooFilter(CuckooFilter):
         s = shortscounter / (self.num_buckets * self.bucket_size)
         l = (self.num_items - shortscounter) / (self.num_buckets * self.bucket_size)
         return 8 * (l / 2**(self.long_fingerprint_len) + s / 2**(self.fingerprint_len))
+    
+    def scrub(self):
+        if self.compute_filter_occupancy() > 0.95:
+            print("Warning: Scrubbing at", self.compute_filter_occupancy(), "may be slow!")
+            if self.compute_filter_occupancy() == 1:
+                print("Scrubbing abort: Filter is full!")
+                return
+        for i in range(len(self.buckets)):
+            if len(self.buckets[i]) == self.bucket_size:
+                eviction_index = i
+                eviction_item = self.actual_elements[eviction_index].pop()
+                eviction_short_fingerprint = self.buckets[eviction_index].pop()
+                eviction_long_fingerprint = self._get_fingerprint(item=eviction_item, len=self.long_fingerprint_len)
+                for _ in range(20):
+                    eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
+                    if len(self.buckets[eviction_index]) < self.bucket_size - 1:
+                        #success, can insert long fingerprint
+                        self.buckets[eviction_index].append(eviction_long_fingerprint)
+                        self.actual_elements[eviction_index].append(eviction_item)
+                        eviction_item = 0
+                        break
+                    else:
+                        #need to swap out, search on
+                        self.actual_elements[eviction_index].append(eviction_item)
+                        if self.sbits[eviction_index]:
+                            self.buckets[eviction_index].append(eviction_long_fingerprint)
+                        else:
+                            self.buckets[eviction_index].append(eviction_short_fingerprint)
+                        eviction_item = self.actual_elements[eviction_index].pop(-2)
+                        self.buckets[eviction_index].pop(-2)
+                        eviction_short_fingerprint = self._get_fingerprint(item=eviction_item, len=self.fingerprint_len)
+                        eviction_long_fingerprint = self._get_fingerprint(item=eviction_item, len=self.long_fingerprint_len)
+                if eviction_item == 0:
+                    continue
+                while True: #continue indefinitely until swap completed (this loop relaxes constraints)
+                    eviction_index = (eviction_index ^ mmh3.hash(key=str(eviction_short_fingerprint), seed=2)) % self.num_buckets # compute alternate bucket
+                    if len(self.buckets[eviction_index]) < self.bucket_size:
+                        #success, can insert fingerprint
+                        if len(self.bucket_size[eviction_index]) == self.bucket_size - 1: #need to transform bucket to shorts
+                            for j in range(len(self.buckets[eviction_index])):
+                                self.buckets[eviction_index][j] = self._get_fingerprint(item=self.actual_elements[eviction_index][j], len=self.fingerprint_len)
+                            self.buckets[eviction_index].append(eviction_short_fingerprint)
+                            self.sbits[eviction_index] = 0
+                        else:
+                            self.buckets[eviction_index].append(eviction_long_fingerprint)
+                        self.actual_elements[eviction_index].append(eviction_item)
+                        break
+                    else:
+                        #need to swap out, search on
+                        self.actual_elements[eviction_index].append(eviction_item)
+                        self.buckets[eviction_index].append(eviction_short_fingerprint)
+                        eviction_item = self.actual_elements[eviction_index].pop(-2)
+                        eviction_short_fingerprint = self.buckets[eviction_index].pop(-2)
+                        eviction_long_fingerprint = self._get_fingerprint(item=eviction_item, len=self.long_fingerprint_len)
