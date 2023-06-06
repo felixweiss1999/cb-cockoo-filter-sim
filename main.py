@@ -2,6 +2,8 @@ from bloom import BloomFilter
 from cuckoo import CuckooFilter, CBCuckooFilter
 import numpy as np
 import json
+import threading
+
 
 def measureFPR(num_buckets, fingerprint_size, target_occupancy):
     cf = CuckooFilter(num_buckets=num_buckets, bucket_size=4, fingerprint_len=fingerprint_size)
@@ -66,23 +68,22 @@ start = 0.3
 end = 1.0
 step = 0.05
 
-for value in [start + i * step for i in range(int((end - start) / step) + 1)]:
-    measurement = measureFPR(8192, 18, value)
-    filename = "measurements18.txt"
-    with open(filename, "a") as file:
-        json.dump(measurement, file)
-        file.write('\n')
+def worker(start, end, step, fingerlength):
+    for value in [start + i * step for i in range(int((end - start) / step) + 1)]:
+        measurement = measureFPR(8192, fingerlength, value)
+        filename = "measurements"+str(fingerlength) + ".txt"
+        with open(filename, "a") as file:
+            json.dump(measurement, file)
+            file.write('\n')
 
-for value in [start + i * step for i in range(int((end - start) / step) + 1)]:
-    measurement = measureFPR(8192, 15, value)
-    filename = "measurements15.txt"
-    with open(filename, "a") as file:
-        json.dump(measurement, file)
-        file.write('\n')
 
-for value in [start + i * step for i in range(int((end - start) / step) + 1)]:
-    measurement = measureFPR(8192, 12, value)
-    filename = "measurements12.txt"
-    with open(filename, "a") as file:
-        json.dump(measurement, file)
-        file.write('\n')
+thread1 = threading.Thread(target=worker, args=(start, end, step, 18))
+thread2 = threading.Thread(target=worker, args=(start, end, step, 15))
+thread3 = threading.Thread(target=worker, args=(start, end, step, 12))
+
+thread1.start()
+thread2.start()
+thread3.start()
+thread1.join()
+thread2.join()
+thread3.join()
