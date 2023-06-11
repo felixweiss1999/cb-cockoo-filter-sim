@@ -1,7 +1,7 @@
 import json
 import matplotlib.pyplot as plt
 
-filename = "measurements.txt"
+filename = "measurements12.txt"
 entities = []
 
 with open(filename, "r") as file:
@@ -9,6 +9,7 @@ with open(filename, "r") as file:
         entity = json.loads(line)
         entities.append(entity)
 
+occupancies = []
 cf_fpr_e = []
 cf_fpr = []
 cbcf_fpr_e = []
@@ -24,16 +25,18 @@ for entity in entities:
     bloom_fpr_e.append(m['bloom_fpr_e'])
     bloom_fpr.append(m['bloom_fpr'])
 
+    p = entity['parameters']
+    occupancies.append(p['target_occupancy'])
 
-x = range(len(cf_fpr_e))
+x = occupancies
 
 # Plot each measurement as a line
-plt.plot(x, cf_fpr_e, label='Measurement 1')
-plt.plot(x, cf_fpr, label='Measurement 2')
-# plt.plot(x, measurement3_values, label='Measurement 3')
-# plt.plot(x, measurement4_values, label='Measurement 4')
-# plt.plot(x, measurement5_values, label='Measurement 5')
-# plt.plot(x, measurement6_values, label='Measurement 6')
+plt.plot(x, cf_fpr_e, label='Expected Cuckoo')
+plt.plot(x, cf_fpr, label='Cuckoo')
+plt.plot(x, cbcf_fpr_e, label='Expected CB Cuckoo')
+plt.plot(x, cbcf_fpr, label='CB Cuckoo')
+plt.plot(x, bloom_fpr_e, label='Expected Bloom')
+plt.plot(x, bloom_fpr, label='Bloom')
 
 # Add labels and legend
 plt.xlabel('X-axis')

@@ -16,6 +16,11 @@ def measureFPR(num_buckets, fingerprint_size, target_occupancy):
         bloom.insert(str(i))
     print(f"Cuckoo Filter: \n    Occupancy: {cf.compute_filter_occupancy()}\n    Expected FPR: {cf.compute_false_positive_rate()}")
     print(f"Configurable-Bucket Cuckoo Filter: \n    Occupancy: {cbcf.compute_filter_occupancy()}\n    Expected FPR: {cbcf.compute_false_positive_rate()}")
+    count = 0
+    for i in range(int(target_occupancy * num_buckets * 4)):
+        if bloom[i]:
+            count += 1
+    print(f"Bloom Filter 'occupancy': {count/(target_occupancy * num_buckets * 4)}\n")
     cbcf.scrub()
     cbcf.scrub()
     cbcf.scrub()
