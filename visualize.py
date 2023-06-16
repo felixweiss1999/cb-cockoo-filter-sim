@@ -1,7 +1,7 @@
 import json
 import matplotlib.pyplot as plt
 
-filename = "measurements12.txt"
+filename = "measurements18.txt"
 entities = []
 
 with open(filename, "r") as file:
@@ -39,8 +39,9 @@ plt.plot(x, bloom_fpr_e, label='Expected Bloom')
 plt.plot(x, bloom_fpr, label='Bloom')
 
 # Add labels and legend
-plt.xlabel('X-axis')
-plt.ylabel('Measurement Values')
+plt.title('f=18')
+plt.xlabel('Occupancy')
+plt.ylabel('FPR')
 plt.legend()
 
 # Show the plot
